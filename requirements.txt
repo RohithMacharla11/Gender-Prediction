@@ -6,4 +6,4 @@ Pillow==11.2.1
 kagglehub==0.3.11
 tqdm==4.67.1
 gunicorn==23.0.0 
-opencv-python ==4.11.0
+opencv-python ==4.11.0.86
