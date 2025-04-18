@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+tf-env/
+venv/
+env/
+
+# IDE settings
+.vscode/
+*.code-workspace
+
+# Output and temporary files
+output/
+static/uploads/
+*.log
+
+# Model training artifacts
+age_model_history128.pkl
+*.pkl
+
+# System files
+.DS_Store
+Thumbs.db
+*.swp

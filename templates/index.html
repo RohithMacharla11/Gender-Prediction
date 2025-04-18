@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gender Prediction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, rgb(223, 26, 19) 0%, rgb(159, 59, 246) 100%);
+        }
+        .file-input-label, .drop-zone {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-input-label:hover {
+            background-color: #2563EB;
+        }
+        .drop-zone.dragover {
+            background-color: #E5E7EB;
+            border-color: #2563EB;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .scroll-container {
+            height: 100vh;
+            overflow: hidden;
+            position: fixed;
+            width: 160px;
+            top: 0;
+        }
+        .scroll-up, .scroll-down {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .scroll-up {
+            animation: scrollUp 20s linear infinite;
+        }
+        .scroll-down {
+            animation: scrollDown 20s linear infinite;
+        }
+        .scroll-container:hover .scroll-up,
+        .scroll-container:hover .scroll-down {
+            animation-play-state: paused;
+        }
+        @keyframes scrollUp {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+        }
+        @keyframes scrollDown {
+            0% { transform: translateY(-50%); }
+            100% { transform: translateY(0); }
+        }
+        .sample-img {
+            width: 160px;
+            height: 160px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .scroll-heading {
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(4px);
+            padding: 8px;
+            text-align: center;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #1F2937;
+            z-index: 10;
+        }
+        #livePredictionSection {
+            display: none;
+            margin-top: 20px;
+            text-align: center;
+        }
+        #videoFeed {
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body class="min-h-screen gradient-bg flex items-center justify-center p-4">
+    <!-- Left scrolling images -->
+    <div class="scroll-container left-0 hidden md:block">
+        <div class="scroll-heading">Sample Images</div>
+        <div class="scroll-up">
+            <!-- First set of images -->
+            <img src="/static/sample_Images/tonyStark.jpg" alt="Sample 1" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+1';">
+            <img src="/static/sample_Images/prabhas.png" alt="Sample 2" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+2';">
+            <img src="/static/sample_Images/30_0_0_20170104201747498.jpg.chip.jpg" alt="Sample 3" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+3';">
+            <img src="/static/sample_Images/30_0_0_20170113133232626.jpg.chip.jpg" alt="Sample 4" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+4';">
+            <img src="/static/sample_Images/30_0_0_20170117000350509.jpg.chip.jpg" alt="Sample 5" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+5';">
+            <!-- Duplicated set for seamless loop -->
+            <img src="/static/sample_Images/tonyStark.jpg" alt="Sample 1" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+1';">
+            <img src="/static/sample_Images/prabhas.png" alt="Sample 2" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+2';">
+            <img src="/static/sample_Images/30_0_0_20170104201747498.jpg.chip.jpg" alt="Sample 3" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+3';">
+            <img src="/static/sample_Images/30_0_0_20170113133232626.jpg.chip.jpg" alt="Sample 4" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+4';">
+            <img src="/static/sample_Images/30_0_0_20170117000350509.jpg.chip.jpg" alt="Sample 5" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+5';">
+        </div>
+    </div>
+    <!-- Main content -->
+    <div class="container max-w-lg w-full bg-white rounded-2xl shadow-2xl p-8 md:p-10 z-10">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 text-center mb-6">Gender Prediction</h1>
+        <form method="POST" enctype="multipart/form-data" class="space-y-6" id="uploadForm">
+            <div class="relative">
+                <div id="dropZone" class="drop-zone border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input type="file" name="file" id="file" accept="image/*" required class="hidden">
+                    <label for="file" class="file-input-label block w-full text-center bg-blue-600 text-white py-3 px-4 rounded-lg font-medium mb-2">
+                        Choose Image
+                    </label>
+                    <p class="text-gray-500">or drag and drop an image here</p>
+                </div>
+            </div>
+            <div class="flex space-x-4">
+                <button type="submit" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-semibold transition duration-300">
+                    Predict Gender
+                </button>
+                <button type="submit" name="live_predict" value="true" id="livePredictButton" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-semibold transition duration-300">
+                    Live Prediction
+                </button>
+            </div>
+        </form>
+        <div id="livePredictionSection">
+            <video id="videoFeed" autoplay playsinline width="320" height="240"></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <button id="stopWebcamButton" class="mt-4 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition duration-300">
+                Stop Webcam
+            </button>
+            <p id="livePrediction" class="mt-4 text-green-600 text-xl font-semibold"></p>
+        </div>
+        <div id="uploadPredictionSection" {% if is_live_prediction %}style="display: none;"{% endif %}>
+            {% if error %}
+                <p class="mt-6 text-red-500 text-center font-medium fade-in">{{ error }}</p>
+            {% endif %}
+            {% if prediction %}
+                <div class="mt-6 text-center fade-in">
+                    <p class="text-green-600 text-xl font-semibold">{{ prediction }}</p>
+                    {% if image_path %}
+                        <img src="{{ image_path }}" alt="Uploaded Image" class="mt-4 mx-auto rounded-lg shadow-md max-w-xs w-full">
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <!-- Right scrolling images -->
+    <div class="scroll-container right-0 hidden md:block">
+        <div class="scroll-heading">Sample Images</div>
+        <div class="scroll-down">
+            <!-- First set of images -->
+            <img src="/static/sample_Images/wanda.png" alt="Sample 1" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+1';">
+            <img src="/static/sample_Images/scralet_jhonson.png" alt="Sample 2" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+2';">
+            <img src="/static/sample_Images/30_1_2_20170116163642750.jpg.chip.jpg" alt="Sample 3" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+3';">
+            <img src="/static/sample_Images/captain_carter.jpg" alt="Sample 4" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+4';">
+            <img src="/static/sample_Images/captain_marvel.jpg" alt="Sample 5" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+5';">
+            <!-- Duplicated set for seamless loop -->
+            <img src="/static/sample_Images/wanda.png" alt="Sample 1" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+1';">
+            <img src="/static/sample_Images/scralet_jhonson.png" alt="Sample 2" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+2';">
+            <img src="/static/sample_Images/30_1_2_20170116163642750.jpg.chip.jpg" alt="Sample 3" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+3';">
+            <img src="/static/sample_Images/captain_carter.jpg" alt="Sample 4" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+4';">
+            <img src="/static/sample_Images/captain_marvel.jpg" alt="Sample 5" class="sample-img" onerror="this.src='https://via.placeholder.com/160?text=Sample+5';">
+        </div>
+    </div>
+    <script>
+        // Display selected file name
+        const fileInput = document.getElementById('file');
+        const dropZone = document.getElementById('dropZone');
+        const label = document.querySelector('.file-input-label');
+        const livePredictButton = document.getElementById('livePredictButton');
+        const stopWebcamButton = document.getElementById('stopWebcamButton');
+        const livePredictionSection = document.getElementById('livePredictionSection');
+        const uploadPredictionSection = document.getElementById('uploadPredictionSection');
+        const video = document.getElementById('videoFeed');
+        const canvas = document.getElementById('canvas');
+        const livePrediction = document.getElementById('livePrediction');
+        let stream = null;
+        let predictionInterval = null;
+
+        fileInput.addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name || 'Choose Image';
+            label.textContent = fileName;
+        });
+
+        // Drag and drop functionality
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                fileInput.files = files;
+                label.textContent = files[0].name;
+            } else {
+                alert('Please drop a valid image file.');
+            }
+        });
+
+        // Live prediction functionality
+        livePredictButton.addEventListener('click', async () => {
+            try {
+                // Hide upload prediction section
+                uploadPredictionSection.style.display = 'none';
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                livePredictionSection.style.display = 'block';
+                livePredictButton.disabled = true;
+
+                // Start predicting every 2 seconds
+                predictionInterval = setInterval(async () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    const imageData = canvas.toDataURL('image/jpeg');
+
+                    const response = await fetch('/live_predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `image=${encodeURIComponent(imageData)}`
+                    });
+                    const result = await response.json();
+
+                    if (result.error) {
+                        livePrediction.textContent = result.error;
+                        livePrediction.classList.remove('text-green-600');
+                        livePrediction.classList.add('text-red-500');
+                    } else {
+                        livePrediction.textContent = result.prediction;
+                        livePrediction.classList.remove('text-red-500');
+                        livePrediction.classList.add('text-green-600');
+                    }
+                }, 2000);
+            } catch (err) {
+                livePrediction.textContent = 'Error accessing webcam';
+                livePrediction.classList.add('text-red-500');
+                livePredictionSection.style.display = 'block';
+            }
+        });
+
+        // Stop webcam
+        stopWebcamButton.addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                video.srcObject = null;
+                livePredictionSection.style.display = 'none';
+                livePredictButton.disabled = false;
+                livePrediction.textContent = '';
+                clearInterval(predictionInterval);
+                // Show upload prediction section again
+                uploadPredictionSection.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
