@@ -1,2 +1,2 @@
-import cv2 as tf
+import numpy as tf
 print(tf.__version__)
