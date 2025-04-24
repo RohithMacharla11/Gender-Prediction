@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, send_from_directory
 import os
 import numpy as np
 from PIL import Image
@@ -20,7 +20,25 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 model = load_gender_model('age_model.weights.h5')
 gender_dict = {0: 'Male', 1: 'Female'}
 
-def crop_face_image(input_path, output_path, cascade_path='haarcascad/haarcascade_frontalface_default.xml', padding=0.2):
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def convert_to_jpeg(input_path, output_path):
+    try:
+        img = Image.open(input_path)
+        if img.format == 'WEBP':
+            img = img.convert('RGB')
+            img.save(output_path, 'JPEG')
+            return True
+        return False
+    except Exception as e:
+        print(f"Error converting WebP: {e}")
+        return False
+
+def crop_face_image(input_path, output_path, cascade_path=cv2.data.haarcascades + 'haarcascade_frontalface_default.xml', padding=0.2):
     # Load Haar Cascade classifier
     face_cascade = cv2.CascadeClassifier(cascade_path)
     if face_cascade.empty():
@@ -65,14 +83,14 @@ def crop_face_image(input_path, output_path, cascade_path='haarcascad/haarcascad
     print(f"Cropped image saved to {output_path}")
     return True
 
-def crop_face_from_array(img_array, cascade_path='haarcascad/haarcascade_frontalface_default.xml', padding=0.2):
+def crop_face_from_array(img_array, cascade_path=cv2.data.haarcascades + 'haarcascade_frontalface_default.xml', padding=0.2):
     # Load Haar Cascade classifier
     face_cascade = cv2.CascadeClassifier(cascade_path)
     if face_cascade.empty():
         return None
 
     # Convert to grayscale
-    gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+    gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
 
     # Detect faces
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
@@ -113,28 +131,47 @@ def index():
             file = request.files['file']
             if file.filename == '':
                 error = 'No file selected'
+            elif not allowed_file(file.filename) and not file.filename.lower().endswith('.webp'):
+                error = 'Unsupported file format. Please upload a PNG, JPG, or JPEG image.'
             elif file:
-                # Save the uploaded file
-                original_filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-                file.save(original_filename)
+                try:
+                    # Save the uploaded file
+                    original_filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                    file.save(original_filename)
 
-                # Crop the face
-                cropped_filename = os.path.join(app.config['UPLOAD_FOLDER'], f"cropped_{file.filename}")
-                cascade_path = 'haarcascad/haarcascade_frontalface_default.xml'
-                if crop_face_image(original_filename, cropped_filename, cascade_path):
-                    # Preprocess and predict using the cropped image
-                    img_array = preprocess_image(cropped_filename)
-                    pred = model.predict(img_array)
-                    pred_gender = gender_dict[int(round(pred[0][0]))]
-                    prediction = f"Predicted Gender: {pred_gender}"
-                    image_path = cropped_filename
-                else:
-                    # Fallback to original image if no face detected
-                    img_array = preprocess_image(original_filename)
-                    pred = model.predict(img_array)
-                    pred_gender = gender_dict[int(round(pred[0][0]))]
-                    prediction = f"Predicted Gender: {pred_gender}"
-                    image_path = original_filename
+                    # Convert WebP to JPEG if necessary
+                    if file.filename.lower().endswith('.webp'):
+                        converted_filename = os.path.join(app.config['UPLOAD_FOLDER'], file.filename.rsplit('.', 1)[0] + '.jpg')
+                        if not convert_to_jpeg(original_filename, converted_filename):
+                            error = 'Failed to process WebP image'
+                            return render_template('index.html', prediction=None, image_path=None, error=error, is_live_prediction=is_live_prediction)
+                        original_filename = converted_filename
+
+                    # Crop the face
+                    cropped_filename = os.path.join(app.config['UPLOAD_FOLDER'], f"cropped_{os.path.basename(original_filename)}")
+                    cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+                    if crop_face_image(original_filename, cropped_filename, cascade_path):
+                        # Preprocess and predict using the cropped image
+                        try:
+                            img_array = preprocess_image(cropped_filename)
+                            pred = model.predict(img_array)
+                            pred_gender = gender_dict[int(round(pred[0][0]))]
+                            prediction = f"Predicted Gender: {pred_gender}"
+                            image_path = cropped_filename
+                        except Exception as e:
+                            error = f"Error processing cropped image: {str(e)}"
+                    else:
+                        # Fallback to original image if no face detected
+                        try:
+                            img_array = preprocess_image(original_filename)
+                            pred = model.predict(img_array)
+                            pred_gender = gender_dict[int(round(pred[0][0]))]
+                            prediction = f"Predicted Gender: {pred_gender} (No face detected, used original image)"
+                            image_path = original_filename
+                        except Exception as e:
+                            error = f"Error processing original image: {str(e)}"
+                except Exception as e:
+                    error = f"Error handling uploaded file: {str(e)}"
             else:
                 error = 'No file uploaded'
 
@@ -166,6 +203,10 @@ def live_predict():
         return jsonify({'prediction': f"Predicted Gender: {pred_gender}", 'error': None})
     except Exception as e:
         return jsonify({'error': str(e), 'prediction': None})
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/x-icon')
 
 if __name__ == '__main__':
     app.run()
